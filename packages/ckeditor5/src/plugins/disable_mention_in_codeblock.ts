@@ -20,25 +20,46 @@ export default class DisableMentionInCodeBlock extends Plugin {
             }
         });
 
-        // Disable mention command in inline code
+        // Disallow mention attribute in inline code
         schema.addAttributeCheck((context, attributeName) => {
-            // TODO figure out how to avoid triggering the mention when the cursor moves outside of the inline code
-            // is there a way to traverse the inline items in a single $text node?
-            // perhaps this isn't the right approach, is it possible to exclude any text inside inline code from the feed produced for the mention feature?
-            if (attributeName === 'mention' && context.endsWith('$text') ) {
+            if (attributeName === 'mention' && context.endsWith('$text')) {
                 if (context.last.getAttribute('code')) {
-                    return false;
-                }
-                let allItems : Array<string> = [];
-                for (let i = 0; i < context.length; i++) {
-                    const item = context.getItem(i);
-                    allItems.push(`${item.name}=${Array.from(item.getAttributeKeys())}`)
-                }
-                console.log(`>>> CHECK: items=${allItems}`);
-                if (context.length >= 2 && context.getItem(context.length - 2).getAttribute('code')) { // 2nd last item is inline code, ie. right after inline code
                     return false;
                 }
             }
         });
+    }
+
+    afterInit() {
+        const editor = this.editor;
+
+        // Wrap the mention feed to check for code context
+        const mentionConfig = editor.config.get('mention');
+        if (mentionConfig && Array.isArray(mentionConfig.feeds)) {
+            mentionConfig.feeds.forEach((feedConfig: any) => {
+                const originalFeed = feedConfig.feed;
+
+                feedConfig.feed = async (queryText: string) => {
+                    const selection = editor.model.document.selection;
+                    const position = selection.getFirstPosition();
+
+                    if (position) {
+                        // Check if inside code block
+                        if (position.parent.is('element', 'codeBlock')) {
+                            return [];
+                        }
+
+                        // Check if inside inline code
+                        const textNode = position.textNode || position.nodeBefore;
+                        if (textNode && textNode.hasAttribute('code')) {
+                            return [];
+                        }
+                    }
+
+                    // Call original feed
+                    return originalFeed(queryText);
+                };
+            });
+        }
     }
 }
