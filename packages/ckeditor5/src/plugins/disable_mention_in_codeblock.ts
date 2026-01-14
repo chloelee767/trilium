@@ -20,25 +20,25 @@ export default class DisableMentionInCodeBlock extends Plugin {
             }
         });
 
-        // Disable mention command when selection is in inline code
-        const mentionCommand = editor.commands.get('mention');
-        if (mentionCommand) {
-            // Store the original refresh method
-            const originalRefresh = mentionCommand.refresh.bind(mentionCommand);
-
-            // Override the refresh method to check for inline code
-            mentionCommand.refresh = function() {
-                // Call the original refresh first
-                originalRefresh();
-
-                // Then check if we're in inline code and disable if so
-                const selection = editor.model.document.selection;
-                const hasCodeAttribute = selection.hasAttribute('code');
-
-                if (hasCodeAttribute) {
-                    this.isEnabled = false;
+        // Disable mention command in inline code
+        schema.addAttributeCheck((context, attributeName) => {
+            // TODO figure out how to avoid triggering the mention when the cursor moves outside of the inline code
+            // is there a way to traverse the inline items in a single $text node?
+            // perhaps this isn't the right approach, is it possible to exclude any text inside inline code from the feed produced for the mention feature?
+            if (attributeName === 'mention' && context.endsWith('$text') ) {
+                if (context.last.getAttribute('code')) {
+                    return false;
                 }
-            };
-        }
+                let allItems : Array<string> = [];
+                for (let i = 0; i < context.length; i++) {
+                    const item = context.getItem(i);
+                    allItems.push(`${item.name}=${Array.from(item.getAttributeKeys())}`)
+                }
+                console.log(`>>> CHECK: items=${allItems}`);
+                if (context.length >= 2 && context.getItem(context.length - 2).getAttribute('code')) { // 2nd last item is inline code, ie. right after inline code
+                    return false;
+                }
+            }
+        });
     }
 }
